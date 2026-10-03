@@ -95,6 +95,10 @@ async function run({ dryRun = false, testDiscord = false } = {}) {
     return;
   }
 
+  if (searchErrors > 0 && !dryRun) {
+    await sendError(`${searchErrors} busca(s) falharam nesta rodada — verifique os logs.`).catch(() => {});
+  }
+
   if (alertsSent === 0 && !dryRun) {
     const statusPayload = buildStatusPayload(CONFIG.trips, newState, bestPrices, getLastQuota());
     await sendMessage(statusPayload).catch(err =>
