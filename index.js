@@ -1,23 +1,21 @@
+import { fileURLToPath } from 'url';
 import { CONFIG } from './config.js';
 import { searchRoundTrip, getBookingLinks, getLastQuota } from './ignav.js';
 import { buildPayload, buildStatusPayload, sendMessage, sendError } from './discord.js';
 import { readState, writeState } from './state.js';
 
-const DRY_RUN     = process.argv.includes('--dry-run');
-const TEST_DISCORD = process.argv.includes('--test-discord');
-
-async function run() {
-  if (TEST_DISCORD) {
+async function run({ dryRun = false, testDiscord = false } = {}) {
+  if (testDiscord) {
     await sendMessage({ content: '✈️ Bot de passagens — conexão com Discord OK!' });
     console.log('Mensagem de teste enviada.');
     return;
   }
 
-  const state = readState();
+  const state = await readState();
   const newState = { ...state };
   let searchErrors = 0;
   let alertsSent = 0;
-  const bestPrices = {}; // melhor preço encontrado por trip (para o card de status)
+  const bestPrices = {};
 
   for (const trip of CONFIG.trips) {
     const key = `${trip.out}_${trip.ret}`;
@@ -71,7 +69,7 @@ async function run() {
 
     const payload = buildPayload(trip, best, links, prev?.alertedPrice, getLastQuota());
 
-    if (DRY_RUN) {
+    if (dryRun) {
       console.log('\n─────────────────────────────────────');
       console.log(JSON.stringify(payload, null, 2));
       console.log('─────────────────────────────────────\n');
@@ -82,7 +80,7 @@ async function run() {
     try {
       await sendMessage(payload);
       newState[key] = { alertedPrice: best.price.amount, alertedAt: today() };
-      writeState(newState);
+      await writeState(newState);
       alertsSent++;
       console.log(`[${key}] alerta enviado e estado salvo`);
     } catch (err) {
@@ -92,13 +90,12 @@ async function run() {
 
   if (searchErrors === CONFIG.trips.length) {
     console.error('Todas as buscas falharam.');
-    if (!DRY_RUN) await sendError('todas as buscas falharam nesta rodada.').catch(() => {});
+    if (!dryRun) await sendError('todas as buscas falharam nesta rodada.').catch(() => {});
     process.exitCode = 1;
     return;
   }
 
-  // Nenhum alerta enviado → card de status
-  if (alertsSent === 0 && !DRY_RUN) {
+  if (alertsSent === 0 && !dryRun) {
     const statusPayload = buildStatusPayload(CONFIG.trips, newState, bestPrices, getLastQuota());
     await sendMessage(statusPayload).catch(err =>
       console.error('erro ao enviar card de status:', err.message)
@@ -142,4 +139,18 @@ function today() {
   return new Date().toISOString().slice(0, 10);
 }
 
-await run();
+// Lambda handler
+export const handler = async (event = {}) => {
+  await run({
+    dryRun:      event.dryRun      ?? false,
+    testDiscord: event.testDiscord ?? false,
+  });
+};
+
+// CLI local: node --env-file=.env index.js [--dry-run] [--test-discord]
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  await run({
+    dryRun:      process.argv.includes('--dry-run'),
+    testDiscord: process.argv.includes('--test-discord'),
+  });
+}

@@ -1,5 +1,8 @@
 {
-  "name": "flight-bot",
+  "name": "autoca-bot",
   "version": "1.0.0",
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3"
+  }
 }
