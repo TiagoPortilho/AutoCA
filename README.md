@@ -19,7 +19,8 @@
 ---
 
 ## Architecture
-
+- Video presentation
+https://youtu.be/yGnGs8n33WI
 <p align="center">
   <img src="public/AutoCA-architecture.png" alt="AutoCA Architecture" width="900">
 </p>
